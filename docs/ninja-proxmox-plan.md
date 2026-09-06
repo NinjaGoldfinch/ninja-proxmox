@@ -977,21 +977,21 @@ Notes specific to this service:
 
 ## 19. Delivery phases
 
-Each phase is shippable and useful on its own. Phases become GitHub issues
-(`gh issue create`) with the section references below, one issue per phase and
-sub-issues for the numbered work.
+Each phase is shippable and useful on its own. Every phase below is a GitHub
+issue carrying the section references and a task checklist; split a checklist
+into sub-issues when a phase is actually picked up.
 
-| Phase | Delivers | Done when |
-| --- | --- | --- |
-| **0 — Skeleton** | Fastify app, config loader, pino, health, Postgres + Drizzle + migrations, Redis, key auth, CLI key minting, Docker compose, CI | `GET /v1/health` behind a bearer key; CI green |
-| **1 — Upstream client** | `src/pve/`: token auth, TLS pinning, pool, governor, error mapping, `pve:check`, `pve:snapshot`, the fake-PVE simulator | `pve:check` prints version, node list and the token's permission gaps against a real cluster |
-| **2 — Read path** | `/cluster/resources` poll, projection, routing index, `GET /v1/cluster`, `/nodes`, `/guests`, `/guests/{vmid}`, detail cache with single-flight, ETags | A guest list served entirely from projection; one upstream request per tick regardless of load |
-| **3 — Task model** | Task table, submit path, follower with backoff, reconciliation, idempotency keys, `?wait=`, `/v1/tasks*`, `tasks` WS topic | Start/stop/shutdown/reboot with honest status; simulator's timeout case adopts its orphaned worker |
-| **4 — Safety** | Scopes, resource policy, confirmations, protected guests, preflight, desired-state idempotency, audit log, `/v1/audit` | Every destructive route is unreachable without a bound confirmation; denials audited |
-| **5 — Operator surface** | Snapshots, migrate (with preconditions), clone, config edits with digest + allow-list, backups, restore, storage routes, bulk with dry-run | The full §9.2 table, each with preflight and audit |
-| **6 — Console** | *Spike first* (§15). If it proves out: ticket broker, relay, session audit, noVNC + xterm.js | A console session opens from the UI with no PVE credential in the browser — or the spike's negative result is written up and the fallback link ships |
-| **7 — Web UI** | The §13 pages, live over WS, keyboard-driven, degrading to polling | An operator's day-to-day work happens here rather than in the PVE UI |
-| **8 — Metrics & events** | RRD proxying, sample recorder, charts, derived events, `events` topic, Prometheus, dashboard | A dashboard opened cold shows the last 24 h; alerts fire on the §14 list |
+| Phase | Issue | Delivers | Done when |
+| --- | --- | --- | --- |
+| **0 — Skeleton** | [#1](https://github.com/NinjaGoldfinch/ninja-proxmox/issues/1) | Fastify app, config loader, pino, health, Postgres + Drizzle + migrations, Redis, key auth, CLI key minting, Docker compose, CI | `GET /v1/health` behind a bearer key; CI green |
+| **1 — Upstream client** | [#2](https://github.com/NinjaGoldfinch/ninja-proxmox/issues/2) | `src/pve/`: token auth, TLS trust (`ca`/`pin`), pool, governor, error mapping, `pve:check`, `pve:snapshot`, the fake-PVE simulator | `pve:check` prints version, node list and the token's permission gaps against a real cluster |
+| **2 — Read path** | [#3](https://github.com/NinjaGoldfinch/ninja-proxmox/issues/3) | `/cluster/resources` poll, projection, routing index, `GET /v1/cluster`, `/nodes`, `/guests`, `/guests/{vmid}`, detail cache with single-flight, ETags | A guest list served entirely from projection; one upstream request per tick regardless of load |
+| **3 — Task model** | [#4](https://github.com/NinjaGoldfinch/ninja-proxmox/issues/4) | Task table, submit path, follower with backoff, reconciliation, idempotency keys, `?wait=`, `/v1/tasks*`, `tasks` WS topic | Start/stop/shutdown/reboot with honest status; simulator's timeout case adopts its orphaned worker |
+| **4 — Safety** | [#5](https://github.com/NinjaGoldfinch/ninja-proxmox/issues/5) | Scopes, resource policy, confirmations, protected guests, preflight, desired-state idempotency, audit log, `/v1/audit` | Every destructive route is unreachable without a bound confirmation; denials audited |
+| **5 — Operator surface** | [#6](https://github.com/NinjaGoldfinch/ninja-proxmox/issues/6) | Snapshots, migrate (with preconditions), clone, config edits with digest + allow-list, backups, restore, storage routes, bulk with dry-run | The full §9.2 table, each with preflight and audit |
+| **6 — Console** | [#7](https://github.com/NinjaGoldfinch/ninja-proxmox/issues/7) | *Spike first* (§15). If it proves out: ticket broker, relay, session audit, noVNC + xterm.js | A console session opens from the UI with no PVE credential in the browser — or the spike's negative result is written up and the fallback link ships |
+| **7 — Web UI** | [#8](https://github.com/NinjaGoldfinch/ninja-proxmox/issues/8) | The §13 pages, live over WS, keyboard-driven, degrading to polling | An operator's day-to-day work happens here rather than in the PVE UI |
+| **8 — Metrics & events** | [#9](https://github.com/NinjaGoldfinch/ninja-proxmox/issues/9) | RRD proxying, sample recorder, charts, derived events, `events` topic, Prometheus, dashboard | A dashboard opened cold shows the last 24 h; alerts fire on the §14 list |
 
 Phases 2 and 3 are the ones worth over-investing in. Everything above them
 inherits their correctness, and both are cheap to get subtly wrong.
