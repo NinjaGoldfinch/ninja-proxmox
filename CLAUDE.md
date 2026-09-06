@@ -38,7 +38,8 @@ commit.
 | `src/state/`, the poller | plan §8 |
 | `src/console/` | plan §15 |
 | `src/db/schema.ts` or a migration | plan §12 |
-| A config variable | plan §16 **and** `.env.example` |
+| A config variable | plan §16 **and** `.env.example` **and** the env file written by `deploy/provision-ninja-proxmox-lxc.sh` |
+| `deploy/*.sh` | `deploy/README.md`, and plan §18 if the deployment shape changed |
 | A decision, constraint or trade-off | plan §2, §3 or §20 |
 
 Do not duplicate prose between README and the plan — link instead.

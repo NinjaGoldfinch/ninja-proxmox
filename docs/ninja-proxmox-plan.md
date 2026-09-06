@@ -218,16 +218,26 @@ in the codebase should mint, refresh or store a ticket outside `src/console/`.
 
 ### 5.2 TLS (C6)
 
-`PVE_TLS_MODE` takes one of three values, and `verify` is the default:
+`PVE_TLS_MODE` takes one of four values, and `ca` is the default:
 
-- `verify` — normal chain validation. Correct when the cluster has a real
-  certificate (ACME or an internal CA).
+- `ca` — validate against the **cluster CA** at `PVE_CA_FILE`, normally a copy
+  of `/etc/pve/pve-root-ca.pem`. This is the right answer for a cluster and the
+  reason it is the default: Proxmox signs every node's certificate with that
+  one CA, so a single trust anchor covers all of them — including nodes added
+  after we were deployed. The provisioner copies it in automatically.
+- `verify` — normal chain validation against the system trust store. Correct
+  when the cluster has a publicly-trusted certificate (ACME).
 - `pin` — validate against `PVE_TLS_FINGERPRINT` (the SHA-256 of the leaf
-  certificate) instead of a chain. This is the intended homelab mode: it
-  defeats interception without needing a CA. `npm run pve:check` prints the
-  fingerprint of the configured host so it can be copied into `.env`.
+  certificate) instead of a chain. Only covers the one node whose certificate
+  was pinned, so it suits a single-node host and nothing larger. `npm run
+  pve:check` prints the fingerprint of the configured host.
 - `insecure` — no validation. The service logs a warning on every boot and
   **refuses to start with `NODE_ENV=production`**.
+
+`ca` and `verify` both require that we reach nodes by the **names their
+certificates are issued for** (C4 routes us to a node by name, not address), so
+those names must resolve. The provisioner writes `/etc/hosts` entries for every
+node in the cluster to guarantee it.
 
 ### 5.3 Transport
 
@@ -659,10 +669,16 @@ We hold one PVE token, and its ACL is the real ceiling. The plan is
 ```bash
 pveum user add ninja@pve
 pveum user token add ninja@pve ctl --privsep 1
-pveum acl modify / --user ninja@pve --role PVEAuditor
-pveum acl modify /vms --token 'ninja@pve!ctl' --role PVEVMAdmin
-pveum acl modify /storage --token 'ninja@pve!ctl' --role PVEDatastoreUser
-pveum acl modify /nodes --token 'ninja@pve!ctl' --role PVEAuditor
+
+# Both subjects, every path. With privsep=1 the effective permission set is the
+# INTERSECTION of the user's grants and the token's, so granting only one of
+# them yields a token that can read and nothing else — and it fails at the
+# first write, not at setup.
+for who in "--user ninja@pve" "--token ninja@pve!ctl"; do
+  pveum acl modify /        $who --role PVEAuditor
+  pveum acl modify /vms     $who --role PVEVMAdmin
+  pveum acl modify /storage $who --role PVEDatastoreUser
+done
 ```
 
 Node power actions and some restores need more (`Sys.PowerMgmt`,
@@ -721,7 +737,12 @@ later:
   free space against a naive estimate and warn (not refuse) below
   `STORAGE_WARN_FREE_PCT`.
 - **Node power** — refuse if the node hosts running guests that are not HA
-  managed, unless `force`.
+  managed, unless `force`. Refuse outright, `force` or not, if the target is
+  `PVE_SELF_NODE` — the node this service is itself running on — unless
+  `ALLOW_SELF_NODE_POWER` is set. Rebooting your own host mid-request is a
+  failure mode with no useful error message, because nothing survives to write
+  one. Node power also needs `Sys.PowerMgmt`, which no built-in role grants
+  alongside VM administration; the provisioner leaves it ungranted by default.
 
 ### 11.4 Config edits
 
@@ -869,8 +890,11 @@ the PVE console, and nothing else in the plan depends on it.
 | `PVE_HOST` | — | Preferred entry node, `host:8006` |
 | `PVE_TOKEN_ID` | — | `user@realm!tokenid` |
 | `PVE_TOKEN_SECRET` | — | The UUID |
-| `PVE_TLS_MODE` | `verify` | `verify` \| `pin` \| `insecure` (§5.2) |
+| `PVE_TLS_MODE` | `ca` | `ca` \| `verify` \| `pin` \| `insecure` (§5.2) |
+| `PVE_CA_FILE` | — | Cluster CA bundle, required for `ca` |
 | `PVE_TLS_FINGERPRINT` | — | SHA-256 leaf fingerprint, required for `pin` |
+| `PVE_SELF_NODE` | — | The node we run on, if any. Guards node power actions (§11.3) |
+| `ALLOW_SELF_NODE_POWER` | `false` | Lift that guard |
 | `PVE_MAX_INFLIGHT` | `6` | Global concurrency budget (C2) |
 | `PVE_MAX_INFLIGHT_PER_NODE` | `2` | Per-node budget |
 | `PVE_BULK_CEILING` | `0.66` | Share of the budget bulk work may hold |
@@ -926,16 +950,24 @@ outside that range visible to its token. Run before a release, by hand.
 
 ## 18. Deployment
 
-`docker compose` with the service, the worker, Postgres and Redis, behind Caddy
-for TLS — same shape as `riot-proxy`. Notes specific to this service:
+Two supported shapes. `docker compose` with the service, the worker, Postgres
+and Redis behind Caddy — same as `riot-proxy` — or the LXC provisioner in
+[`deploy/`](../deploy), which builds a container on a Proxmox host and sets up
+the API token, ACLs, cluster CA and database on the way through. The
+provisioner is the expected path for a homelab; compose is the expected path
+when the control plane lives off-cluster.
+
+Notes specific to this service:
 
 - **Network position.** It holds a credential that can delete every VM you own.
   It belongs on the management network, not the public internet. The compose
   file binds to localhost by default and the README says this in the first
   paragraph of its security section.
-- **It must not run on a node it manages.** A `node.reboot` that reboots the
-  host running the control plane is a footgun with an obvious ending. Boot-time
-  check: compare `/version`'s node against our hostname and warn loudly.
+- **Running on a node it manages needs a guard.** A `node.reboot` that reboots
+  the host running the control plane is a footgun with an obvious ending, and
+  the LXC deployment puts us in exactly that position by design. `PVE_SELF_NODE`
+  names the host; power actions against it are refused (§11.3). Off-cluster
+  deployment avoids the problem entirely and is preferred where practical.
 - **Two replicas of the API are fine; exactly one worker leads.** Redis lock,
   renewed, with the poll and follower loops behind it.
 - **Backups of our own Postgres** matter more than they look: the audit log and

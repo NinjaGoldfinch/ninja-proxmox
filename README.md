@@ -33,7 +33,23 @@ history, metrics, and (opt-in) console. Cluster formation, disk and Ceph
 administration, updates and certificates stay in the Proxmox UI — see the
 non-goals in the plan.
 
-## Planned quick start
+## Quick start on a Proxmox host
+
+One script builds an LXC container with the service, its database, its Proxmox
+API token and the ACLs that token needs. Run it on the **Proxmox host**, as
+root:
+
+```bash
+git clone https://github.com/NinjaGoldfinch/ninja-proxmox
+cd ninja-proxmox/deploy
+CTID=260 CT_IP=192.168.1.60/24 CT_GW=192.168.1.1 ./provision-ninja-proxmox-lxc.sh
+```
+
+See [`deploy/`](deploy/) for what it sets up and why. Because there is no code
+yet, it provisions the box completely and leaves the units stopped until
+`./update-ninja-proxmox.sh <CTID>` finds something to build.
+
+## Local development
 
 Node 26 is required, not merely recommended — `npm install` refuses to run on
 anything else. `.nvmrc` pins it.
@@ -68,15 +84,23 @@ Create a privilege-separated token rather than reusing `root@pam`:
 ```bash
 pveum user add ninja@pve
 pveum user token add ninja@pve ctl --privsep 1
-pveum acl modify /       --user  ninja@pve   --role PVEAuditor
-pveum acl modify /vms    --token 'ninja@pve!ctl' --role PVEVMAdmin
-pveum acl modify /storage --token 'ninja@pve!ctl' --role PVEDatastoreUser
+
+for who in "--user ninja@pve" "--token ninja@pve!ctl"; do
+  pveum acl modify /        $who --role PVEAuditor
+  pveum acl modify /vms     $who --role PVEVMAdmin
+  pveum acl modify /storage $who --role PVEDatastoreUser
+done
 ```
 
 A token with `--privsep 1` starts with **no** permissions even if its user is
-root — the grant above is not optional. `npm run pve:check` reports which
-planned features the current token cannot perform, so gaps show up on a
-checklist rather than as a 403 mid-incident.
+root, and its effective rights are the *intersection* of the user's grants and
+its own — which is why both subjects appear in that loop. Grant only one and
+you get a token that reads fine and fails at the first write.
+`npm run pve:check` reports which planned features the current token cannot
+perform, so gaps show up on a checklist rather than as a 403 mid-incident.
+
+**Or skip all of this**: [`deploy/`](deploy/) provisions a container on your
+Proxmox host that does the token, the ACLs, the CA and the environment for you.
 
 ## Security
 
@@ -96,6 +120,7 @@ disabling verification; `PVE_TLS_MODE=insecure` refuses to start in production.
 | --- | --- |
 | `docs/ninja-proxmox-plan.md` | The design: constraints, architecture, API contract, safety model, phases |
 | `docs/proxmox-api-surface.md` | Every upstream Proxmox call we depend on |
+| `deploy/` | One-command LXC provisioner for a Proxmox host, plus the updater |
 | `src/` | Service and worker (not yet written) |
 | `public/` | Single-file web UI, no build step |
 
