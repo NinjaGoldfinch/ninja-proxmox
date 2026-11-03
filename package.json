@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Self-hosted control plane for a Proxmox VE cluster: a safe HTTP API and operator web UI over the PVE API",
-  "license": "GPL-2.0-only",
+  "license": "MIT",
   "type": "module",
   "engines": {
     "node": ">=26 <27"

@@ -126,4 +126,4 @@ disabling verification; `PVE_TLS_MODE=insecure` refuses to start in production.
 
 ## Licence
 
-GPL-2.0-only.
+MIT. See [LICENSE](LICENSE).
